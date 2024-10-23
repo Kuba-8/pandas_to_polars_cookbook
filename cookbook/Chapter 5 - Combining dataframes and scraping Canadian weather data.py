@@ -1,21 +1,28 @@
 # %%
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
 
-plt.style.use("ggplot")
-plt.rcParams["figure.figsize"] = (15, 3)
-plt.rcParams["font.family"] = "sans-serif"
 
 # %%
 # By the end of this chapter, we're going to have downloaded all of Canada's weather data for 2012, and saved it to a CSV. We'll do this by downloading it one month at a time, and then combining all the months together.
 # Here's the temperature every hour for 2012!
 
-weather_2012_final = pd.read_csv("../data/weather_2012.csv", index_col="date_time")
+weather_2012_final = pd.read_csv("/Users/jakubfridrich/GitHub/pandas_to_polars_cookbook/data/weather_2012.csv", index_col="date_time")
 weather_2012_final["temperature_c"].plot(figsize=(15, 6))
 plt.show()
 
+print(weather_2012_final.head())
 # TODO: rewrite using Polars
+
+pl_weather_2012_final = pl.read_csv("/Users/jakubfridrich/GitHub/pandas_to_polars_cookbook/data/weather_2012.csv")
+
+date_time = pl_weather_2012_final["date_time"].to_numpy()
+temperature_c = pl_weather_2012_final["temperature_c"].to_numpy()
+
+plt.figure(15, 6)
+sns.lineplot(x=date_time, y=temperature_c)
+plt.show()
+
+pl_weather_2012_final.head(5)
+
 
 # %%
 # Okay, let's start from the beginning.
@@ -26,7 +33,7 @@ plt.show()
 
 
 # This URL has to be fixed first!
-url_template = "http://climate.weather.gc.ca/climateData/bulkdata_e.html?format=csv&stationID=5415&Year={year}&Month={month}&timeframe=1&submit=Download+Data"
+url_template = "http://climate.weather.gc.ca/climate_data/bulk_data_e.html?format=csv&stationID=5415&Year={year}&Month={month}&timeframe=1&submit=Download+Data"
 
 year = 2012
 month = 3
@@ -42,6 +49,17 @@ weather_mar2012.head()
 
 # TODO: rewrite using Polars. Yes, Polars can handle URLs similarly.
 
+pl_weather_mar2012 =pl.read_csv(
+    url_march,
+    encoding="latin1", 
+    has_header=True
+)
+pl_weather_mar2012 = pl_weather_mar2012.with_columns(
+    pl.col("Date_Time (LST)").str.strptime(pl.Datetime, fmt="%Y-%m-%d %H:%M:%S")
+)
+
+pl_weather_mar2012.head(5)
+
 
 # %%
 # Let's clean up the data a bit.
@@ -50,9 +68,15 @@ weather_mar2012.head()
 weather_mar2012 = weather_mar2012.dropna(axis=1, how="any")
 weather_mar2012[:5]
 
+
 # This is much better now -- we only have columns with real data.
 
 # TODO: rewrite using Polars
+
+pl_weather_mar2012 = pl_weather_mar2012[[s.name for s in pl_weather_mar2012 if s.is_nan().sum() == 0]]
+pl_weather_mar2012[:5]
+
+
 
 
 # %%
@@ -63,6 +87,9 @@ weather_mar2012 = weather_mar2012.drop(["Year", "Month", "Day", "Time (LST)"], a
 weather_mar2012[:5]
 
 # TODO: redo this using polars
+
+pl_weather_mar2012 = pl_weather_mar2012.drop(["Year", "Month", "Day", "Time (LST)"])
+pl_weather_mar2012[:5]
 
 # %%
 # When you look at the data frame, you see that some column names have some weird characters in them.
@@ -80,6 +107,14 @@ weather_mar2012.columns = weather_mar2012.columns.str.replace(
 
 # TODO: rewrite using Polars
 
+pl_weather_mar2012.columns
+
+pl_weather_mar2012 = pl_weather_mar2012.rename(
+    {col: col.replace('ï»¿"', "") for col in pl_weather_mar2012.columns}
+)
+pl_weather_mar2012 = pl_weather_mar2012.rename(
+    {col: col.replace("Â", "") for col in pl_weather_mar2012.columns}
+)
 
 # %%
 # Optionally, you can also rename columns more manually for specific cases:
@@ -116,6 +151,11 @@ plt.show()
 
 # TODO: redo this using polars
 
+temperature_c = pl_weather_mar2012["Temp (°C)"].to_numpy()
+date_time = pl_weather_mar2012["Date/Time (LST)"].to_numpy()
+sns.lineplot(x=temperature_c, y=date_time)
+plt.show()
+
 # %%
 # This one's just for fun -- we've already done this before, using groupby and aggregate! We will learn whether or not it gets colder at night. Well, obviously. But let's do it anyway.
 temperatures = weather_mar2012[["temperature_c"]].copy()
@@ -127,6 +167,11 @@ plt.show()
 # So it looks like the time with the highest median temperature is 2pm. Neat.
 
 # TODO: redo this using polars
+
+pl_temperatures = pl_weather_mar2012.select("Temp (°C)").clone()
+print(pl_temperatures.head(5))
+pl_temperatures = pl_temperatures.with_columns(pl.col("Date/Time (LST)").dt.hour().alias("Hour"))
+pl_median_temperatures = pl_temperatures.group_by("Hour").agg(pl.col("Temp (°C)").median())
 
 # %%
 # Okay, so what if we want the data for the whole year? Ideally the API would just let us download that, but I couldn't figure out a way to do that.
