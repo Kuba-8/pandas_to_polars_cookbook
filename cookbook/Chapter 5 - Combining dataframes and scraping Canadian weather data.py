@@ -1,4 +1,13 @@
 # %%
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import polars as pl
+import seaborn as sns
+
+plt.style.use("ggplot")
+plt.rcParams["figure.figsize"] = (15, 3)
+plt.rcParams["font.family"] = "sans-serif"
 
 
 # %%
@@ -9,7 +18,8 @@ weather_2012_final = pd.read_csv("/Users/jakubfridrich/GitHub/pandas_to_polars_c
 weather_2012_final["temperature_c"].plot(figsize=(15, 6))
 plt.show()
 
-print(weather_2012_final.head())
+weather_2012_final.head()
+
 # TODO: rewrite using Polars
 
 pl_weather_2012_final = pl.read_csv("/Users/jakubfridrich/GitHub/pandas_to_polars_cookbook/data/weather_2012.csv")
@@ -55,11 +65,12 @@ pl_weather_mar2012 =pl.read_csv(
     has_header=True
 )
 pl_weather_mar2012 = pl_weather_mar2012.with_columns(
-    pl.col("Date_Time (LST)").str.strptime(pl.Datetime, fmt="%Y-%m-%d %H:%M:%S")
+    pl.col("Date/Time (LST)").str.strptime(pl.Datetime)
 )
 
 pl_weather_mar2012.head(5)
 
+pl_weather_mar2012.columns
 
 # %%
 # Let's clean up the data a bit.
@@ -75,8 +86,6 @@ weather_mar2012[:5]
 
 pl_weather_mar2012 = pl_weather_mar2012[[s.name for s in pl_weather_mar2012 if s.is_nan().sum() == 0]]
 pl_weather_mar2012[:5]
-
-
 
 
 # %%
@@ -116,6 +125,7 @@ pl_weather_mar2012 = pl_weather_mar2012.rename(
     {col: col.replace("Â", "") for col in pl_weather_mar2012.columns}
 )
 
+
 # %%
 # Optionally, you can also rename columns more manually for specific cases:
 weather_mar2012 = weather_mar2012.rename(
@@ -143,6 +153,10 @@ weather_mar2012.columns = weather_mar2012.columns.str.lower()
 print(weather_mar2012.columns)
 
 # TODO: redo this using polars
+
+pl_weather_mar2012 = pl_weather_mar2012.rename({col: col.lower() for col in pl_weather_mar2012.columns})
+print(pl_weather_mar2012.columns)
+
 
 # %%
 # Notice how it goes up to 25° C in the middle there? That was a big deal. It was March, and people were wearing shorts outside.
@@ -215,6 +229,33 @@ def download_weather_month(year, month):
 
 # TODO: redefine these functions using polars and your code above
 
+def pl_clean_data(data):
+    data = data[[s.name for s in pl_weather_mar2012 if s.is_nan().sum() == 0]]
+    data = data.drop(["Year", "Month", "Day", "Time (LST)"])
+    data.rename(
+    {col: col.replace('ï»¿"', "") for col in pl_weather_mar2012.columns})
+    data.rename(
+    {col: col.replace('Â', "") for col in pl_weather_mar2012.columns}
+    data = data.rename({col: col.lower() for col in data.columns})
+    data.index.name = "date_time"
+    return data
+
+
+
+def pl_download_weather_month(year, month):
+    url_template = "http://climate.weather.gc.ca/climate_data/bulk_data_e.html?format=csv&stationID=5415&Year={year}&Month={month}&timeframe=1&submit=Download+Data"
+    url = url_template.format(year=year, month=month)
+    weather_data = ld.read_csv(
+        url, has_header=True
+    weather_data = weather_data.with_columns(
+    pl.col("Date/Time (LST)").str.strptime(pl.Datetime)
+    )
+    weather_data_clean = clean_data(weather_data)
+    return weather_data_clean
+
+
+
+
 # %%
 download_weather_month(2012, 1)[:5]
 # %%
@@ -226,8 +267,14 @@ weather_2012.head()
 
 # TODO: do the same with polars
 
+pl_data_by_month = [pl_download_weather_month(2012, i) for i in range(1, 13)]
+pl_weather_2012 = pd.concat(pl_data_by_month)
+pl_weather_2012.head()
+
 # %%
 # Now, let's save the data.
 weather_2012.to_csv("../data/weather_2012.csv")
 
 # TODO: use polars to save the data.
+
+pl_weather_2012.to_csv("/Users/jakubfridrich/GitHub/pandas_to_polars_cookbook/data/weather_2012.csv")
