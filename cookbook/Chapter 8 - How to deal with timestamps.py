@@ -1,6 +1,6 @@
 # %%
 import pandas as pd
-
+import polars as pl
 # %%
 # Parsing Unix timestamps
 # It's not obvious how to deal with Unix timestamps in pandas -- it took me quite a while to figure this out. The file we're using here is a popularity-contest file of packages.
@@ -14,7 +14,10 @@ popcon.columns = ["atime", "ctime", "package-name", "mru-program", "tag"]
 popcon[:5]
 
 # TODO: please reimplement this using Polars
-
+popcon = pl.read_csv(
+    "../data/popularity-contest",separator=" ",ignore_errors=True).slice(0,-1)
+popcon.columns = ["atime", "ctime", "package-name", "mru-program", "tag"]
+popcon[:5]
 
 # %%
 # The magical part about parsing timestamps in pandas is that numpy datetimes are already stored as Unix timestamps. So all we need to do is tell pandas that these integers are actually datetimes -- it doesn't need to do any conversion at all.
@@ -23,7 +26,11 @@ popcon["atime"] = popcon["atime"].astype(int)
 popcon["ctime"] = popcon["ctime"].astype(int)
 
 # TODO: please reimplement this using Polars
-
+popcon = popcon.with_columns([
+    pl.col("atime").cast(pl.Int64),
+    pl.col("ctime").cast(pl.Int64)
+])
+popcon
 
 # %%
 # Every numpy array and pandas series has a dtype -- this is usually `int64`, `float64`, or `object`. Some of the time types available are `datetime64[s]`, `datetime64[ms]`, and `datetime64[us]`. There are also `timedelta` types, similarly.
@@ -34,7 +41,11 @@ popcon["ctime"] = pd.to_datetime(popcon["ctime"], unit="s")
 popcon.head()
 
 # TODO: please reimplement this using Polars
-
+popcon = popcon.with_columns([
+    (pl.col("atime")*1000).cast(pl.Datetime("ms")),  # 将 'atime' 转换为以秒为单位的日期时间
+    (pl.col("ctime")*1000).cast(pl.Datetime("ms"))   # 将 'ctime' 转换为以秒为单位的日期时间
+])
+popcon
 
 # %%
 # Now suppose we want to look at all packages that aren't libraries.
@@ -47,6 +58,9 @@ nonlibraries = popcon[~popcon["package-name"].str.contains("lib")]
 nonlibraries.sort_values("ctime", ascending=False)[:10]
 
 # TODO: please reimplement this using Polars
-
+popcon = popcon.filter(pl.col("atime") > pl.datetime(1970, 1, 1))
+nonlibraries = popcon.filter(~pl.col("package-name").str.contains("lib"))
+nonlibraries_sorted = nonlibraries.sort("ctime", descending=True).head(10)
+nonlibraries_sorted
 
 # The whole message here is that if you have a timestamp in seconds or milliseconds or nanoseconds, then you can just "cast" it to a `'datetime64[the-right-thing]'` and pandas/numpy will take care of the rest.
